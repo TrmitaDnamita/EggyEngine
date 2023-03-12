@@ -24,23 +24,41 @@ namespace EggyEngine{
 	class Engine {
 	public:
 
-		void createInstance();
-		void createSwapChain(GLFWwindow* _window);
+		Engine();
+		~Engine();
 
-		void destroyEngine();
+		void run();
 
 	private:
 		
+		void destroyWindow();
+		void destroyInstance();
+		void destroySwapChain();
+		void destroyPipeline();
+
+//Window Pass
+
+		void startEngine();
+
+		void createInstance();
+
+		void createSwapChain();
+
+		void createPipeline();
+
+		GLFWwindow* _window;
+
+//End Pass
+
 //Instance Pass
 
 		VkInstance _vkInstance = VK_NULL_HANDLE;
-		VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
 
 //End Pass
 
 //SwapChain Pass
 
-		void createSurface(GLFWwindow* _window);
+		void createSurface();
 
 		void pickPhysicalDevice();
 
@@ -52,7 +70,7 @@ namespace EggyEngine{
 
 		bool checkDeviceExtensionSupport();
 
-		void startSwapChain(GLFWwindow* _window);
+		void startSwapChain();
 
 		void createImageViews();
 
@@ -62,13 +80,13 @@ namespace EggyEngine{
 
 		VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 
-		VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* _window);
-
-		VkSwapchainKHR _vkSwapChain;
+		VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
 		VkDevice _vkDevice = VK_NULL_HANDLE;
 		VkSurfaceKHR _vkSurface = VK_NULL_HANDLE;
 		VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
+
+		VkSwapchainKHR _vkSwapChain;
 
 		VkFormat _swapChainImageFormat;
 		VkExtent2D _swapChainExtent;
@@ -85,13 +103,43 @@ namespace EggyEngine{
 
 		VkShaderModule createShaderModule(const std::vector<char>& shaderBinary);
 		
-		std::vector<VkPipelineShaderStageCreateInfo> loadShaderModules(std::string _shaderName);
+		VkPipelineShaderStageCreateInfo* loadShaderModules(std::string _shaderName);
 
-		void createDynamicState();
+		VkPipelineDynamicStateCreateInfo pipelineDynamicState();
+		VkPipelineVertexInputStateCreateInfo inputVertexState();
+		VkPipelineInputAssemblyStateCreateInfo inputAssemblyState();
 
+		VkPipelineViewportStateCreateInfo viewportState();
+		VkPipelineRasterizationStateCreateInfo rasterizationState();
+		VkPipelineMultisampleStateCreateInfo  multisamplingState();
+		VkPipelineColorBlendStateCreateInfo colorBlendState();
+
+		void createRenderPass();
+		void createPipelineLayout();
+		
+		VkRenderPass _vkRenderPass;
+		VkPipelineLayout _vkPipelineLayout;
+		VkPipeline _vkGraphicsPipeline;
 
 		VkShaderModule _vertShaderModule;
 		VkShaderModule _fragShaderModule;
+
+//End Pass
+
+//Buffer Pass
+
+		void createFramebuffers();
+		void destroyFrameBuffers();
+
+		std::vector<VkFramebuffer> _swapChainFramebuffers;
+
+//End Pass
+
+//Command Buffer Pass
+
+		void createCommandPool();
+
+		VkCommandPool commandPool;
 
 //End Pass
 	};

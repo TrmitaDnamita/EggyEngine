@@ -38,6 +38,8 @@ const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation
 
 namespace Debug {
 
+    static VkDebugUtilsMessengerEXT _vkDebugMessenger = nullptr;
+
     static bool checkValidationLayerSupport() {
 
         uint32_t layerCount;
@@ -78,12 +80,12 @@ namespace Debug {
         return extensions;
     }
 
-    static VkResult CreateDebugUtilsMessengerEXT( VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger ) {
+    static VkResult CreateDebugUtilsMessengerEXT( VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator ) {
 
         auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
 
         if (func != nullptr)
-            return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+            return func(instance, pCreateInfo, pAllocator, &_vkDebugMessenger);
         else
             return VK_ERROR_EXTENSION_NOT_PRESENT;
     }
@@ -96,7 +98,7 @@ namespace Debug {
     }
 
     static void populateDebugMessengerCreateInfo( VkDebugUtilsMessengerCreateInfoEXT& debugCreateInfo ) {
-
+        
         debugCreateInfo = {};
         debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -104,12 +106,12 @@ namespace Debug {
         debugCreateInfo.pfnUserCallback = getDebugCallback;
     }
 
-    static void destroyDebugUtilsMessengerEXT( VkInstance instance, VkDebugUtilsMessengerEXT _debugMessenger, const VkAllocationCallbacks* pAllocator ) {
+    static void destroyDebugUtilsMessengerEXT( VkInstance instance, const VkAllocationCallbacks* pAllocator ) {
 
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
 
         if (func != nullptr)
-            func(instance, _debugMessenger, pAllocator);
+            func(instance, _vkDebugMessenger, pAllocator);
     }
 
     static void errorWindow(const wchar_t* errorMessage) {
