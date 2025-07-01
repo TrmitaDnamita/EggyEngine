@@ -46,7 +46,7 @@ namespace EggyEngine{
 
 		void createPipeline();
 
-		GLFWwindow* _window;
+		GLFWwindow* _window = nullptr;
 
 //End Pass
 
@@ -86,10 +86,12 @@ namespace EggyEngine{
 		VkSurfaceKHR _vkSurface = VK_NULL_HANDLE;
 		VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
 
-		VkSwapchainKHR _vkSwapChain;
+		VkSwapchainKHR _vkSwapChain = VK_NULL_HANDLE;
 
 		VkFormat _swapChainImageFormat;
 		VkExtent2D _swapChainExtent;
+
+		VkQueue _graphicsQueue = VK_NULL_HANDLE;
 		VkQueue _presentQueue = VK_NULL_HANDLE;
 
 		std::vector<VkImage> _swapChainImages;
@@ -117,30 +119,38 @@ namespace EggyEngine{
 		void createRenderPass();
 		void createPipelineLayout();
 		
-		VkRenderPass _vkRenderPass;
-		VkPipelineLayout _vkPipelineLayout;
-		VkPipeline _vkGraphicsPipeline;
+		VkRenderPass _vkRenderPass = VK_NULL_HANDLE;
+		VkPipelineLayout _vkPipelineLayout = VK_NULL_HANDLE;
+		VkPipeline _vkGraphicsPipeline = VK_NULL_HANDLE;
 
-		VkShaderModule _vertShaderModule;
-		VkShaderModule _fragShaderModule;
+		VkShaderModule _vertShaderModule = VK_NULL_HANDLE;
+		VkShaderModule _fragShaderModule = VK_NULL_HANDLE;
 
 //End Pass
 
-//Buffer Pass
+//Draw Pass
+		
+		void drawFrame();
+		void createSyncObjects();
+
+		void destroyDraw();
 
 		void createFramebuffers();
-		void destroyFrameBuffers();
+		void createCommandPool();
+		void createCommandBuffer();
+
+		void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		std::vector<VkFramebuffer> _swapChainFramebuffers;
 
+		VkCommandPool _vkCommandPool = VK_NULL_HANDLE;
+		VkCommandBuffer _vkCommandBuffer = VK_NULL_HANDLE;
+		
+		VkSemaphore _vkImageAvailableSemaphore = VK_NULL_HANDLE;
+		VkSemaphore _vkRenderFinishedSemaphore = VK_NULL_HANDLE;
+		VkFence _vkInFlightFence = VK_NULL_HANDLE;
+
 //End Pass
 
-//Command Buffer Pass
-
-		void createCommandPool();
-
-		VkCommandPool commandPool;
-
-//End Pass
 	};
 }

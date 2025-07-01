@@ -28,7 +28,7 @@ namespace EggyEngine {
 
         destroyPipeline();
         destroySwapChain();
-        destroyFrameBuffers();
+        destroyDraw();
 
         vkDestroyDevice(_vkDevice, nullptr);
 
@@ -50,12 +50,16 @@ namespace EggyEngine {
         vkDestroyInstance(_vkInstance, nullptr);
     }
 
-    void Engine::destroyFrameBuffers() {
+    void Engine::destroyDraw() {
         
         for (auto framebuffer : _swapChainFramebuffers)
             vkDestroyFramebuffer(_vkDevice, framebuffer, nullptr);
         
+        vkDestroyCommandPool(_vkDevice, _vkCommandPool, nullptr);
 
+        vkDestroySemaphore(_vkDevice, _vkImageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(_vkDevice, _vkRenderFinishedSemaphore, nullptr);
+        vkDestroyFence(_vkDevice, _vkInFlightFence, nullptr);
     }
 
     void Engine::destroySwapChain(){
@@ -83,10 +87,18 @@ namespace EggyEngine {
     void Engine::run()
     {
         while (true) {
-            if (glfwWindowShouldClose(_window))
+            
+            if (glfwWindowShouldClose(_window)) {
+                vkDeviceWaitIdle(_vkDevice);
                 return;
-
+            }
             glfwPollEvents();
+            
+            //if window is minized, we skip frame
+            if (glfwGetWindowAttrib(_window, GLFW_ICONIFIED) == GLFW_TRUE)
+                continue;
+
+            drawFrame();
         }
     }
 
@@ -99,6 +111,12 @@ namespace EggyEngine {
         createPipeline();
 
         createFramebuffers();
+
+        createCommandPool();
+
+        createCommandBuffer();
+
+        createSyncObjects();
     }
 
 //End Pass
@@ -401,6 +419,7 @@ namespace EggyEngine {
         if (vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_vkDevice) != VK_SUCCESS)
             Debug::errorWindow(L"failed to create logical device!");
 
+        vkGetDeviceQueue(_vkDevice, indices.graphicsFamily, 0, &_graphicsQueue);
         vkGetDeviceQueue(_vkDevice, indices.presentFamily, 0, &_presentQueue);
     }
 
@@ -753,6 +772,17 @@ namespace EggyEngine {
             .pDependencies = nullptr
         };
 
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies = &dependency;
+
         if (vkCreateRenderPass(_vkDevice, &renderPassInfo, nullptr, &_vkRenderPass) != VK_SUCCESS)
             Debug::errorWindow(L"failed to create render pass!");
     }
@@ -824,7 +854,7 @@ namespace EggyEngine {
     
 //End Pass
 
-//Buffer Pass
+//Draw Pass
 
     void Engine::createFramebuffers() {
 
@@ -853,5 +883,165 @@ namespace EggyEngine {
         }
     }
 
+    void Engine::createCommandPool() {
+
+        VkCommandPoolCreateInfo poolInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = indices.graphicsFamily
+        };
+
+        if (vkCreateCommandPool(_vkDevice, &poolInfo, nullptr, &_vkCommandPool) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to create command pool!");
+    }
+
+    void Engine::createCommandBuffer() {
+        
+        VkCommandBufferAllocateInfo allocInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = _vkCommandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        if (vkAllocateCommandBuffers(_vkDevice, &allocInfo, &_vkCommandBuffer) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to allocate command buffers!");
+    }
+
+    void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+
+        VkCommandBufferBeginInfo beginInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .pInheritanceInfo = nullptr
+        };
+
+        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to begin recording command buffer!");
+        
+        VkRect2D renderA = {
+            .offset = {0, 0},
+            .extent = _swapChainExtent,
+        };
+
+        VkClearValue clearColor = { 
+            {
+                {
+                    0.0f,   //R
+                    0.0f,   //G
+                    0.0f,   //B
+                    1.0f    //A
+                }
+            } 
+        };
+
+        VkRenderPassBeginInfo renderPassInfo{
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .pNext = nullptr,
+            .renderPass = _vkRenderPass,
+            .framebuffer = _swapChainFramebuffers[imageIndex],
+            .renderArea = renderA,
+            .clearValueCount = 1,
+            .pClearValues = &clearColor
+        };
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _vkGraphicsPipeline);
+
+        VkViewport viewport{
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = static_cast<float>(_swapChainExtent.width),
+            .height = static_cast<float>(_swapChainExtent.height),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
+
+        VkRect2D scissor{
+            .offset = { 0, 0 },
+            .extent = _swapChainExtent,
+        };
+
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(commandBuffer);
+
+        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to record command buffer!");
+    }
+
+    void Engine::createSyncObjects() {
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        if (vkCreateSemaphore(_vkDevice, &semaphoreInfo, nullptr, &_vkImageAvailableSemaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(_vkDevice, &semaphoreInfo, nullptr, &_vkRenderFinishedSemaphore) != VK_SUCCESS ||
+            vkCreateFence(_vkDevice, &fenceInfo, nullptr, &_vkInFlightFence) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to create semaphores!");
+
+    }
+    
+    /*
+    Wait for the previous frame to finish
+    Acquire an image from the swap chain
+    Record a command buffer which draws the scene onto that image
+    Submit the recorded command buffer
+    Present the swap chain image
+    */
+    void Engine::drawFrame() {
+
+        vkWaitForFences(_vkDevice, 1, &_vkInFlightFence, VK_TRUE, UINT64_MAX);
+        vkResetFences(_vkDevice, 1, &_vkInFlightFence);
+
+        uint32_t imageIndex;
+        vkAcquireNextImageKHR(_vkDevice, _vkSwapChain, UINT64_MAX, _vkImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+        vkResetCommandBuffer(_vkCommandBuffer, 0);
+
+        recordCommandBuffer(_vkCommandBuffer, imageIndex);
+        
+        VkSemaphore waitSemaphores[] = { _vkImageAvailableSemaphore };
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        VkSemaphore signalSemaphores[] = { _vkRenderFinishedSemaphore };
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = waitSemaphores;
+        submitInfo.pWaitDstStageMask = waitStages;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &_vkCommandBuffer;
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = signalSemaphores;
+
+        if (vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _vkInFlightFence) != VK_SUCCESS)
+            Debug::errorWindow(L"failed to submit draw command buffer!");
+
+        VkSwapchainKHR swapChains[] = { _vkSwapChain };
+
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = signalSemaphores;
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = swapChains;
+        presentInfo.pImageIndices = &imageIndex;
+
+        vkQueuePresentKHR(_presentQueue, &presentInfo);
+    }
+    
 //End Pass
 }
